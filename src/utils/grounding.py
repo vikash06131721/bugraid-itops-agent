@@ -23,9 +23,12 @@ def validate_grounding(
     violations: list[str] = []
 
     for claim in claims:
-        if claim.source_id not in valid_ids:
+        # source_id may be comma-separated when a claim cites multiple sources
+        cited_ids = [sid.strip() for sid in claim.source_id.split(",") if sid.strip()]
+        invalid = [sid for sid in cited_ids if sid not in valid_ids]
+        if invalid:
             violations.append(
-                f"Claim '{claim.claim[:60]}...' cites '{claim.source_id}' "
+                f"Claim '{claim.claim[:60]}...' cites '{', '.join(invalid)}' "
                 f"which is not in the retrieved sources."
             )
 

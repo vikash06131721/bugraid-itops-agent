@@ -42,7 +42,7 @@ class IterativeDeepener:
         initial_hit_map: dict[str, bool],
         max_iterations_override: int | None = None,
     ) -> tuple[Evidence, int, dict[str, bool]]:
-        evidence = initial_evidence
+        evidence = Evidence(sources=initial_evidence.sources, iteration=1)
         seen_ids = set(evidence.doc_ids)
         hit_map = dict(initial_hit_map)
         iterations_used = 1
