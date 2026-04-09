@@ -1,0 +1,77 @@
+version: "3.9"
+
+# One command starts everything:
+#   docker-compose up -d
+#
+# Then run:
+#   python scripts/seed_stores.py
+#   uvicorn src.api.main:app --reload
+
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    container_name: bugraid-opensearch
+    environment:
+      - discovery.type=single-node
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=BugRaid@2024!
+      - plugins.security.disabled=true   # simplified for local dev
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5.20.0
+    container_name: bugraid-neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/bugraidpassword
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_memory_heap_max__size=512m
+    ports:
+      - "7474:7474"   # browser UI
+      - "7687:7687"   # bolt protocol
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p bugraidpassword 'RETURN 1'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # The agent API — starts after stores are healthy
+  agent:
+    build: .
+    container_name: bugraid-agent
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=bugraidpassword
+      - MELT_DATA_PATH=/app/data/melt_telemetry.json
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+    profiles:
+      - full  # run with: docker-compose --profile full up
+
+volumes:
+  opensearch-data:
+  neo4j-data:
+  neo4j-logs:

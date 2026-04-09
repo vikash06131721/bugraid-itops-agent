@@ -1,0 +1,123 @@
+[
+  {
+    "question_id": "Q1",
+    "question": "What is the payment service responsible for?",
+    "key_facts": [
+      "payment-svc handles all payment processing",
+      "tier-1 service",
+      "depends on auth-svc and fraud-detection-svc",
+      "has had P1 incidents involving connection pool exhaustion"
+    ],
+    "primary_source": "opensearch",
+    "difficulty": "low"
+  },
+  {
+    "question_id": "Q2",
+    "question": "What deployments happened in the last 24 hours?",
+    "key_facts": [
+      "payment-svc v2.4.2 deployed 2024-11-13T09:15:00Z",
+      "checkout-svc v1.9.3 deployed 2024-11-13T11:30:00Z",
+      "gateway-svc v4.1.1 deployed 2024-11-13T14:45:00Z"
+    ],
+    "primary_source": "neo4j",
+    "difficulty": "low"
+  },
+  {
+    "question_id": "Q3",
+    "question": "Which services does checkout-svc depend on?",
+    "key_facts": [
+      "payment-svc (critical, 45ms)",
+      "auth-svc (critical, 20ms)",
+      "inventory-svc (high, 35ms)",
+      "catalog-svc (medium, 15ms)",
+      "pricing-svc (medium, 10ms)"
+    ],
+    "primary_source": "neo4j",
+    "difficulty": "low"
+  },
+  {
+    "question_id": "Q4",
+    "question": "What incidents involved auth-svc last month?",
+    "key_facts": [
+      "multiple incidents in October 2024",
+      "severity range P1-P3",
+      "common patterns: token expiry, JWKS timeouts"
+    ],
+    "primary_source": "opensearch+neo4j",
+    "difficulty": "medium"
+  },
+  {
+    "question_id": "Q5",
+    "question": "Is payment-svc healthy right now?",
+    "key_facts": [
+      "mostly healthy after 2024-11-12 incident",
+      "memory still slightly elevated post-incident",
+      "connection pool recovering",
+      "v2.4.2 deployed with pool fix"
+    ],
+    "primary_source": "melt+neo4j",
+    "difficulty": "medium"
+  },
+  {
+    "question_id": "Q6",
+    "question": "What changed before the last 3 major incidents?",
+    "key_facts": [
+      "checkout-svc v1.9.2 deployed 3.5h before INC-2024-0487",
+      "gateway-svc v4.0.9 deployed 2h before Oct 28 P1",
+      "auth-svc v3.0.4 deployed 4h before Oct 14 P1",
+      "deployment-to-incident pattern is consistent"
+    ],
+    "primary_source": "neo4j+opensearch",
+    "difficulty": "hard"
+  },
+  {
+    "question_id": "Q7",
+    "question": "Which service is the most fragile in our system?",
+    "key_facts": [
+      "gateway-svc has highest total incident count",
+      "gateway-svc has highest dependency fan-in (35 DEPENDS_ON relationships)",
+      "payment-svc has most P1 incidents",
+      "gateway-svc amplifies failures via retry storms"
+    ],
+    "primary_source": "neo4j+melt",
+    "difficulty": "hard"
+  },
+  {
+    "question_id": "Q8",
+    "question": "Why does checkout slow down every Friday evening?",
+    "key_facts": [
+      "inventory-svc weekly_batch_reconciliation starts at 18:00 UTC every Friday",
+      "batch job acquires table locks on shared DB",
+      "checkout-svc p99 latency spikes from ~55ms to ~280ms",
+      "duration: approximately 2 hours",
+      "pattern confirmed in logs and MELT traces"
+    ],
+    "primary_source": "melt",
+    "difficulty": "hard"
+  },
+  {
+    "question_id": "Q9",
+    "question": "Compare how we resolved the last 5 payment incidents",
+    "key_facts": [
+      "pod restart is most common resolution (3 of 5)",
+      "connection pool is recurring root cause",
+      "average resolution time ~90 minutes for P1s",
+      "patch deployment pattern after restart"
+    ],
+    "primary_source": "opensearch",
+    "difficulty": "very_hard"
+  },
+  {
+    "question_id": "Q10",
+    "question": "What don't we know about today's incident?",
+    "key_facts": [
+      "no heap dump captured \u2014 exact memory leak source unknown",
+      "distributed traces incomplete \u2014 gateway-svc traces missing correlation IDs",
+      "customer transaction impact count not available in telemetry",
+      "unclear if connection pool fix is permanent or masks deeper memory issue",
+      "no post-mortem on whether checkout-svc v1.9.2 deployment contributed"
+    ],
+    "primary_source": "gap_identification",
+    "difficulty": "expert"
+  }
+]

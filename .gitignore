@@ -1,0 +1,15 @@
+.env
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg
+venv/
+bugraidai/
+.venv/
+my_answers.json
