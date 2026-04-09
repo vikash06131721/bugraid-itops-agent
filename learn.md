@@ -158,3 +158,82 @@ Layer 4 TTFT:             ~1.2s
 Complex queries (2 iterations):  ~3.0s   ✓
 Simple queries (1 iteration):   ~2.1s   ✓
 ```
+
+---
+
+## Loom Demo Notes
+
+### 3:00–4:00 — Iterative deepening in action
+
+Run one of the harder questions — Q9 or Q10 work well. Keep the uvicorn terminal
+visible alongside the curl output.
+
+What to point at in the logs:
+
+```
+INFO | After iteration 1: 7 sources, confidence=0.61
+INFO | Identified gap for iteration: missing root cause for payment-svc memory spike
+INFO | Iteration 2: found 4 new sources
+INFO | After iteration 2: 11 sources, confidence=0.88
+INFO | Confidence 0.88 >= threshold — stopping at iteration 2
+```
+
+The story here is that round 1 surfaces the symptom (gateway retry storm), round 2
+finds the root cause (payment-svc memory leak) because the gap call told it what to
+look for. A single-pass RAG would have stopped at the symptom. The confidence threshold
+means it stops the moment it has enough — no wasted iterations.
+
+For contrast, run a simple deployment history query right after. The logs will show
+it stopping at iteration 1 because the intent is `deployment_history`. Two queries,
+two different iteration counts — the system is making a real decision, not just looping
+a fixed number of times.
+
+---
+
+### 4:00–5:00 — What to build next: Verified Resolution Capture
+
+**The problem it solves**
+
+Right now the agent retrieves from historical incident docs. Those docs are written
+by whoever filed the ticket — which means they describe what engineers *thought* was
+wrong, not what actually fixed the incident. At scale, that distinction compounds.
+If 1,000 incidents have slightly wrong RCAs, every future retrieval is pulling from
+bad signal.
+
+**What Verified Resolution Capture does**
+
+After an incident closes, the agent re-runs the original research query against what
+actually happened. It diffs its recommendation against the actual fix. If they match,
+it creates a `ResolutionPattern` node in Neo4j with a `verified: true` flag and 3x
+retrieval weight. If they don't match, it flags the gap for review.
+
+The confirmation is one click — the on-call engineer sees "did this match your fix?"
+after the incident closes. They don't have to write anything.
+
+```
+Incident closes
+      ↓
+Agent re-runs query → compares recommendation vs actual fix
+      ↓
+Match?  → ResolutionPattern node (verified=true, weight=3x)
+No match? → Gap flagged, incident doc corrected
+      ↓
+Next similar incident retrieves the verified pattern first
+```
+
+**Why it scales**
+
+At 100 engineers: the verified pattern library is small but every entry is trustworthy.
+At 10,000 engineers: the library has seen thousands of incident variations. The agent
+stops recommending from unverified docs when a verified pattern exists for that
+failure mode.
+At 100,000 engineers: the verified patterns cover essentially every common failure
+mode across the industry. New incidents match to verified fixes in round 1, confidence
+crosses 0.85 immediately, iteration stops. The system gets faster as it gets bigger —
+the opposite of most RAG systems which degrade under corpus growth because more docs
+means more noise.
+
+The Neo4j hook is already there. `ResolutionPattern` nodes connect to the same
+`Service` and `Incident` nodes already in the graph. The retrieval weight is a
+one-line change to the Cypher query. The hard part — building the pipeline that
+produces verified signal at scale — is what makes this defensible.
