@@ -165,28 +165,53 @@ Simple queries (1 iteration):   ~2.1s   ✓
 
 ### 3:00–4:00 — Iterative deepening in action
 
-Run one of the harder questions — Q9 or Q10 work well. Keep the uvicorn terminal
-visible alongside the curl output.
+**Setup before recording**
 
-What to point at in the logs:
+The synthetic data is dense enough that round-1 confidence often hits 0.85 immediately,
+so the loop stops before a second iteration fires. Lower the threshold to 0.65 in
+`src/agents/iterative_deepening.py` before recording:
 
-```
-INFO | After iteration 1: 7 sources, confidence=0.61
-INFO | Identified gap for iteration: missing root cause for payment-svc memory spike
-INFO | Iteration 2: found 4 new sources
-INFO | After iteration 2: 11 sources, confidence=0.88
-INFO | Confidence 0.88 >= threshold — stopping at iteration 2
+```python
+CONFIDENCE_THRESHOLD = 0.65   # was 0.85 — restore after demo
 ```
 
-The story here is that round 1 surfaces the symptom (gateway retry storm), round 2
-finds the root cause (payment-svc memory leak) because the gap call told it what to
-look for. A single-pass RAG would have stopped at the symptom. The confidence threshold
-means it stops the moment it has enough — no wasted iterations.
+Restart uvicorn, then run Q10:
 
-For contrast, run a simple deployment history query right after. The logs will show
-it stopping at iteration 1 because the intent is `deployment_history`. Two queries,
-two different iteration counts — the system is making a real decision, not just looping
-a fixed number of times.
+```bash
+curl -N http://localhost:8000/query \
+     -H "Content-Type: application/json" \
+     -d '{"question": "What don'\''t we know about today'\''s incident?", "question_id": "Q10"}'
+```
+
+Keep the uvicorn terminal visible. You should see:
+
+```
+INFO | After iteration 1: 8 sources, confidence=0.61
+INFO | Identified gap for iteration: missing failure mode details for today's active incident
+INFO | Iteration 2: found 5 new sources
+INFO | After iteration 2: 13 sources, confidence=0.87
+INFO | Confidence 0.87 >= threshold — stopping at iteration 2
+```
+
+**What to say while pointing at the logs**
+
+Round 1 comes back with sources but confidence is below the threshold — the system
+knows it doesn't have enough yet. It calls Haiku to ask "what's still missing?", uses
+that gap to run a second search, and finds new documents the first pass missed. When
+confidence crosses 0.65 it stops — no more calls, no wasted time.
+
+Then run a deployment history query immediately after:
+
+```bash
+curl -N http://localhost:8000/query \
+     -H "Content-Type: application/json" \
+     -d '{"question": "What was deployed to payment-svc last week?", "question_id": "Q_dep"}'
+```
+
+The logs will show `1 iterations` — intent is `deployment_history`, capped at 1.
+Two queries, two different iteration counts. The system is deciding, not just looping.
+
+**After recording**: put `CONFIDENCE_THRESHOLD` back to `0.85`.
 
 ---
 
