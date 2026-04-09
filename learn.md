@@ -165,17 +165,10 @@ Simple queries (1 iteration):   ~2.1s   ✓
 
 ### 3:00–4:00 — Iterative deepening in action
 
-**Setup before recording**
+No setup needed. Complex queries now always run at least 2 iterations — the confidence
+check only kicks in from round 3 onwards.
 
-The synthetic data is dense enough that round-1 confidence often hits 0.85 immediately,
-so the loop stops before a second iteration fires. Lower the threshold to 0.65 in
-`src/agents/iterative_deepening.py` before recording:
-
-```python
-CONFIDENCE_THRESHOLD = 0.65   # was 0.85 — restore after demo
-```
-
-Restart uvicorn, then run Q10:
+Run Q10 with the uvicorn terminal visible:
 
 ```bash
 curl -N http://localhost:8000/query \
@@ -183,22 +176,23 @@ curl -N http://localhost:8000/query \
      -d '{"question": "What don'\''t we know about today'\''s incident?", "question_id": "Q10"}'
 ```
 
-Keep the uvicorn terminal visible. You should see:
+You should see in the logs:
 
 ```
-INFO | After iteration 1: 8 sources, confidence=0.61
+INFO | After iteration 1: 8 sources, confidence=0.94
 INFO | Identified gap for iteration: missing failure mode details for today's active incident
-INFO | Iteration 2: found 5 new sources
-INFO | After iteration 2: 13 sources, confidence=0.87
-INFO | Confidence 0.87 >= threshold — stopping at iteration 2
+INFO | Iteration 2: found 4 new sources
+INFO | After iteration 2: 12 sources, confidence=0.96
+INFO | Confidence 0.96 >= threshold — stopping at iteration 2
 ```
 
 **What to say while pointing at the logs**
 
-Round 1 comes back with sources but confidence is below the threshold — the system
-knows it doesn't have enough yet. It calls Haiku to ask "what's still missing?", uses
-that gap to run a second search, and finds new documents the first pass missed. When
-confidence crosses 0.65 it stops — no more calls, no wasted time.
+Round 1 has enough to answer — confidence is already high. But we always do a second
+pass because round 1 only sees what it can find with the raw query. Round 2 knows what
+round 1 found, asks "what's still missing?", and searches for that specifically. It found
+4 new documents the first pass missed. Then it stops — confidence threshold passed, no
+more calls.
 
 Then run a deployment history query immediately after:
 
@@ -208,10 +202,9 @@ curl -N http://localhost:8000/query \
      -d '{"question": "What was deployed to payment-svc last week?", "question_id": "Q_dep"}'
 ```
 
-The logs will show `1 iterations` — intent is `deployment_history`, capped at 1.
-Two queries, two different iteration counts. The system is deciding, not just looping.
-
-**After recording**: put `CONFIDENCE_THRESHOLD` back to `0.85`.
+Logs show `1 iterations` — intent is `deployment_history`, capped at 1. Two queries,
+two different iteration counts. The system is deciding, not just looping a fixed number
+of times.
 
 ---
 
