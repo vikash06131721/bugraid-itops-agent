@@ -52,7 +52,8 @@ class IterativeDeepener:
         logger.info("After iteration 1: %d sources, confidence=%.2f", len(evidence.sources), confidence)
 
         for i in range(2, cap + 1):
-            if confidence >= self.confidence_threshold:
+            # Always run at least one refinement round — confidence check kicks in from round 3.
+            if i > 2 and confidence >= self.confidence_threshold:
                 logger.info("Confidence %.2f >= threshold — stopping at iteration %d", confidence, i - 1)
                 break
 
