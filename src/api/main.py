@@ -23,7 +23,7 @@ from src.agents.iterative_deepening import IterativeDeepener
 from src.agents.query_understanding import QueryUnderstandingAgent
 from src.agents.response_generator import ResponseGenerator
 from src.agents.retrieval_orchestrator import RetrievalOrchestrator
-from src.models import DataSource, Evidence, QueryIntent, QueryPlan
+from src.models import DataSource, Evidence, QueryPlan
 from src.retrieval.melt_retriever import MELTRetriever
 from src.retrieval.neo4j_retriever import Neo4jRetriever, make_neo4j_driver
 from src.retrieval.opensearch_retriever import OpenSearchRetriever, make_opensearch_client
@@ -131,13 +131,8 @@ async def query(request: QueryRequest) -> StreamingResponse:
             )
             logger.info("Q[%s] intent=%s entities=%s", request.question_id, query_plan.intent, query_plan.entities)
 
-            # Simple intents (single-source, well-defined) rarely benefit from extra rounds.
-            # Cap them at 1 to avoid spending ~1s per iteration for no gain.
-            _SIMPLE_INTENTS = {QueryIntent.DEPLOYMENT_HISTORY, QueryIntent.DEPENDENCY_ANALYSIS, QueryIntent.SERVICE_HEALTH}
-            max_iter = 1 if query_plan.intent in _SIMPLE_INTENTS else _deepener.max_iterations
-
             evidence, iterations_used, hit_map = await _deepener.run(  # type: ignore[union-attr]
-                query_plan, evidence, hit_map, max_iterations_override=max_iter
+                query_plan, evidence, hit_map
             )
             logger.info("Q[%s] %d iterations, %d sources", request.question_id, iterations_used, len(evidence.sources))
 

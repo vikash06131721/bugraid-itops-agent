@@ -13,13 +13,16 @@ import logging
 import anthropic
 
 from src.agents.retrieval_orchestrator import RetrievalOrchestrator
-from src.models import Evidence, QueryPlan
+from src.models import Evidence, QueryIntent, QueryPlan
 from src.utils.grounding import estimate_confidence
 
 logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 3
 CONFIDENCE_THRESHOLD = 0.85
+
+# Single-source, well-defined intents — one round is enough.
+_SIMPLE_INTENTS = {QueryIntent.DEPLOYMENT_HISTORY, QueryIntent.DEPENDENCY_ANALYSIS, QueryIntent.SERVICE_HEALTH}
 
 
 class IterativeDeepener:
@@ -46,7 +49,13 @@ class IterativeDeepener:
         seen_ids = set(evidence.doc_ids)
         hit_map = dict(initial_hit_map)
         iterations_used = 1
-        cap = max_iterations_override if max_iterations_override is not None else self.max_iterations
+
+        if max_iterations_override is not None:
+            cap = max_iterations_override
+        elif query_plan.intent in _SIMPLE_INTENTS:
+            cap = 1
+        else:
+            cap = self.max_iterations
 
         confidence = estimate_confidence(evidence.sources, query_plan.intent.value)
         logger.info("After iteration 1: %d sources, confidence=%.2f", len(evidence.sources), confidence)
