@@ -40,21 +40,18 @@ class IterativeDeepener:
         query_plan: QueryPlan,
         initial_evidence: Evidence,
         initial_hit_map: dict[str, bool],
+        max_iterations_override: int | None = None,
     ) -> tuple[Evidence, int, dict[str, bool]]:
-        """
-        Start from the initial evidence and deepen until we're confident
-        or we've hit the iteration limit.
-
-        """
         evidence = initial_evidence
         seen_ids = set(evidence.doc_ids)
         hit_map = dict(initial_hit_map)
         iterations_used = 1
+        cap = max_iterations_override if max_iterations_override is not None else self.max_iterations
 
         confidence = estimate_confidence(evidence.sources, query_plan.intent.value)
         logger.info("After iteration 1: %d sources, confidence=%.2f", len(evidence.sources), confidence)
 
-        for i in range(2, self.max_iterations + 1):
+        for i in range(2, cap + 1):
             if confidence >= self.confidence_threshold:
                 logger.info("Confidence %.2f >= threshold — stopping at iteration %d", confidence, i - 1)
                 break
@@ -97,7 +94,7 @@ class IterativeDeepener:
 
         try:
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=150,
                 system="You are helping refine a search query. Be concise.",
                 messages=[{

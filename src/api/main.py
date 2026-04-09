@@ -17,11 +17,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+import asyncio
+
 from src.agents.iterative_deepening import IterativeDeepener
 from src.agents.query_understanding import QueryUnderstandingAgent
 from src.agents.response_generator import ResponseGenerator
 from src.agents.retrieval_orchestrator import RetrievalOrchestrator
-from src.models import Evidence
+from src.models import DataSource, Evidence, QueryIntent, QueryPlan
 from src.retrieval.melt_retriever import MELTRetriever
 from src.retrieval.neo4j_retriever import Neo4jRetriever, make_neo4j_driver
 from src.retrieval.opensearch_retriever import OpenSearchRetriever, make_opensearch_client
@@ -114,13 +116,28 @@ async def query(request: QueryRequest) -> StreamingResponse:
         hit_map = {"opensearch": False, "neo4j": False, "melt": False}
 
         try:
-            query_plan = await _query_agent.parse(request.question)  # type: ignore[union-attr]
+            # Fire query understanding and a broad initial retrieval simultaneously.
+            # The broad plan uses the raw text with no filters — good enough for round 1.
+            # When the real query plan arrives we use it for deepening, not re-retrieval.
+            broad_plan = QueryPlan(
+                intent=QueryIntent.GENERAL,
+                entities=[],
+                sources_needed=[DataSource.OPENSEARCH, DataSource.NEO4J, DataSource.MELT],
+                raw_query=request.question,
+            )
+            query_plan, (evidence, hit_map) = await asyncio.gather(  # type: ignore[misc]
+                _query_agent.parse(request.question),  # type: ignore[union-attr]
+                _orchestrator.retrieve(broad_plan),    # type: ignore[union-attr]
+            )
             logger.info("Q[%s] intent=%s entities=%s", request.question_id, query_plan.intent, query_plan.entities)
 
-            evidence, hit_map = await _orchestrator.retrieve(query_plan)  # type: ignore[union-attr]
+            # Simple intents (single-source, well-defined) rarely benefit from extra rounds.
+            # Cap them at 1 to avoid spending ~1s per iteration for no gain.
+            _SIMPLE_INTENTS = {QueryIntent.DEPLOYMENT_HISTORY, QueryIntent.DEPENDENCY_ANALYSIS, QueryIntent.SERVICE_HEALTH}
+            max_iter = 1 if query_plan.intent in _SIMPLE_INTENTS else _deepener.max_iterations
 
             evidence, iterations_used, hit_map = await _deepener.run(  # type: ignore[union-attr]
-                query_plan, evidence, hit_map
+                query_plan, evidence, hit_map, max_iterations_override=max_iter
             )
             logger.info("Q[%s] %d iterations, %d sources", request.question_id, iterations_used, len(evidence.sources))
 

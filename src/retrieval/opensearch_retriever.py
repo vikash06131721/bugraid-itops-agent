@@ -154,7 +154,7 @@ class OpenSearchRetriever:
         for doc_id in sorted_ids:
             hit = docs[doc_id]
             src = hit["_source"]
-                normalized = min(1.0, scores[doc_id] * 30)
+            normalized = min(1.0, scores[doc_id] * 30)
             results.append(
                 Source(
                     type=DataSource.OPENSEARCH,

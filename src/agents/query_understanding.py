@@ -73,7 +73,7 @@ class QueryUnderstandingAgent:
     async def parse(self, query: str) -> QueryPlan:
         try:
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=512,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": query}],
